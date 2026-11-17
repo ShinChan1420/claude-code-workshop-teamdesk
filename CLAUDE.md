@@ -10,6 +10,9 @@ Bun workspaces + Turborepo: `apps/web` (TanStack Start on Cloudflare Workers, Ho
 - `bun test` runs every test. One file: `bun test <path>`. One test: add `-t "name"`.
 - `bun run check` is lint (Ultracite/Biome) plus typecheck. Run it before saying work is done. `bun run fix` formats.
 
+- `bun run dev:remote` runs the dev server against the real D1 database (`REMOTE_DB=1`, read in `vite.config.ts`). `db:apply` / `db:seed` (and `:remote` variants) run wrangler against local or remote D1. `bun run deploy` builds and runs `wrangler deploy`.
+- A husky pre-commit hook runs `ultracite fix` and re-stages files, so staged files may change on commit.
+
 Use bun, not npm or yarn. The lockfile is `bun.lock` and scripts assume bun.
 
 ## Rules that are easy to get wrong
@@ -49,3 +52,6 @@ It is shadcn output and gets regenerated.
 
 **`notes` is boilerplate.**
 It is the template for new tables and services (`packages/db/src/notes.ts`, `packages/services/src/notes.ts`), not a product feature.
+
+**Live sync goes through one Durable Object.**
+`BookingsHub` (`apps/web/src/server/bookings-hub.ts`) is a single instance (`idFromName("main")`) that holds every browser's WebSocket from `/api/ws` (routed in `server.ts`). After a booking mutation the router calls `ctx.notifyBookingsChanged(roomId)`, which POSTs `/notify` to the hub, and the hub broadcasts `{type: "bookings.changed", roomId}`. The socket carries no booking data: clients (`hooks/use-bookings-socket.ts`) refetch over tRPC. The notifier never rejects, since the booking already succeeded. The class must stay a named export of `server.ts`, and `wrangler.jsonc` declares its binding and migration. Design notes are in `docs/specs/`.
