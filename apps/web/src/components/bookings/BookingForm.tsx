@@ -1,5 +1,11 @@
 import { BOOKING_MIN_MINUTES, BOOKING_TITLE_MAX_LENGTH } from "@repo/db/shared";
-import { type ChangeEvent, type FormEvent, useCallback, useState } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import FormError from "#/components/form-error";
 import { Button } from "#/components/ui/button";
@@ -44,6 +50,14 @@ interface BookingFormProps {
   /** The chosen UTC day, YYYY-MM-DD. */
   day: string;
   error: string | null;
+  /**
+   * The range the Start and End fields currently describe, as UTC ISO times, or
+   * null before the user has picked anything and after a booking is created.
+   * The availability grid highlights it.
+   */
+  onSelectionChange: (
+    selection: { endsAt: string; startsAt: string } | null
+  ) => void;
   onSubmit: (draft: BookingDraft) => Promise<boolean>;
   pending: boolean;
   prefill?: BookingPrefill | null;
@@ -54,6 +68,7 @@ export default function BookingForm({
   capacity,
   day,
   error,
+  onSelectionChange,
   onSubmit,
   pending,
   prefill,
@@ -62,13 +77,27 @@ export default function BookingForm({
   const [start, setStart] = useState(times.start);
   const [end, setEnd] = useState(times.end);
   const [seenSeq, setSeenSeq] = useState(times.seq);
+  // The untouched default times are not a selection, so they stay unhighlighted.
+  const [touched, setTouched] = useState(false);
 
   // A new grid pick replaces whatever is in the time fields.
   if (times.seq !== seenSeq) {
     setSeenSeq(times.seq);
+    setTouched(true);
     setStart(times.start);
     setEnd(times.end);
   }
+
+  useEffect(() => {
+    if (!(touched && start && end) || end <= start) {
+      onSelectionChange(null);
+      return;
+    }
+    onSelectionChange({
+      endsAt: isoFromDayAndTime(day, end),
+      startsAt: isoFromDayAndTime(day, start),
+    });
+  }, [day, end, onSelectionChange, start, touched]);
 
   const overlaps = useCallback(
     (startTime: string, endTime: string) =>
@@ -87,6 +116,7 @@ export default function BookingForm({
   const handleStartChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const { value } = event.target;
+      setTouched(true);
       if (!value) {
         setStart(value);
         return;
@@ -128,6 +158,7 @@ export default function BookingForm({
   const handleEndChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const { value } = event.target;
+      setTouched(true);
       if (!value) {
         setEnd(value);
         return;
@@ -158,6 +189,7 @@ export default function BookingForm({
         title: String(data.get("title") ?? ""),
       });
       if (ok) {
+        setTouched(false);
         form.reset();
       }
     },

@@ -97,7 +97,8 @@ function BookingsPage() {
   const navigate = Route.useNavigate();
   const router = useRouter();
   const [prefill, setPrefill] = useState<BookingPrefill | null>(null);
-  // The slots picked on the grid. They stay highlighted until they are booked.
+  // The range in the form's Start and End fields. The grid highlights it, so a
+  // drag and the time fields always agree, until the booking is created.
   const [selection, setSelection] = useState<GridSelection | null>(null);
   const { actingMember, setActingMemberId } = useActingMember(members);
   const createBooking = useAction();
@@ -147,7 +148,6 @@ function BookingsPage() {
     (startIso: string, pickedEndIso?: string) => {
       const endIso =
         pickedEndIso ?? new Date(Date.parse(startIso) + SLOT_MS).toISOString();
-      setSelection({ endsAt: endIso, startsAt: startIso });
       setPrefill((previous) => ({
         end: formatUtcTime(endIso),
         seq: (previous?.seq ?? 0) + 1,
@@ -162,10 +162,8 @@ function BookingsPage() {
   );
 
   const handleRoomChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      setSelection(null);
-      return navigate({ search: { day, roomId: event.target.value } });
-    },
+    (event: ChangeEvent<HTMLSelectElement>) =>
+      navigate({ search: { day, roomId: event.target.value } }),
     [day, navigate]
   );
 
@@ -190,7 +188,6 @@ function BookingsPage() {
         })
       );
       if (ok) {
-        setSelection(null);
         await loadUpcoming();
       }
       return ok;
@@ -281,6 +278,7 @@ function BookingsPage() {
               capacity={room.capacity}
               day={day}
               error={createBooking.error}
+              onSelectionChange={setSelection}
               onSubmit={handleCreate}
               pending={createBooking.pending}
               prefill={prefill}
