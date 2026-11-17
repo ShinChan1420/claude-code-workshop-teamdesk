@@ -55,3 +55,6 @@ It is the template for new tables and services (`packages/db/src/notes.ts`, `pac
 
 **Live sync goes through one Durable Object.**
 `BookingsHub` (`apps/web/src/server/bookings-hub.ts`) is a single instance (`idFromName("main")`) that holds every browser's WebSocket from `/api/ws` (routed in `server.ts`). After a booking mutation the router calls `ctx.notifyBookingsChanged(roomId)`, which POSTs `/notify` to the hub, and the hub broadcasts `{type: "bookings.changed", roomId}`. The socket carries no booking data: clients (`hooks/use-bookings-socket.ts`) refetch over tRPC. The notifier never rejects, since the booking already succeeded. The class must stay a named export of `server.ts`, and `wrangler.jsonc` declares its binding and migration. Design notes are in `docs/specs/`.
+
+**The availability grid is pure logic plus pointer handling.**
+`apps/web/src/lib/availability.ts` builds the 7-day grid and clamps drags (`dragRange` stops at the first non-free slot); it has no DOM or bindings and is unit-tested. `AvailabilityGrid.tsx` turns pointer events into a range, where a plain click is a one-slot drag. The picked range lives in `routes/bookings.tsx` (`selection`) and stays highlighted until the booking is created or the room changes. Slots someone else books drop out of the highlight because only free slots render as selected.

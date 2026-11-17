@@ -7,7 +7,9 @@ import {
   useMemo,
   useState,
 } from "react";
-import AvailabilityGrid from "#/components/bookings/AvailabilityGrid";
+import AvailabilityGrid, {
+  type GridSelection,
+} from "#/components/bookings/AvailabilityGrid";
 import BookingForm, {
   type BookingDraft,
   type BookingPrefill,
@@ -95,6 +97,8 @@ function BookingsPage() {
   const navigate = Route.useNavigate();
   const router = useRouter();
   const [prefill, setPrefill] = useState<BookingPrefill | null>(null);
+  // The slots picked on the grid. They stay highlighted until they are booked.
+  const [selection, setSelection] = useState<GridSelection | null>(null);
   const { actingMember, setActingMemberId } = useActingMember(members);
   const createBooking = useAction();
   const cancelBooking = useAction();
@@ -137,11 +141,13 @@ function BookingsPage() {
   );
   useBookingsSocket(handleBookingsChanged);
 
-  // A grid pick prefills the form (15 minutes, the user can extend it) and
-  // moves the form to the picked day.
+  // A grid pick prefills the form and moves it to the picked day. A click picks
+  // one slot (the user can extend it); a drag passes the end it covered.
   const handlePick = useCallback(
-    (startIso: string) => {
-      const endIso = new Date(Date.parse(startIso) + SLOT_MS).toISOString();
+    (startIso: string, pickedEndIso?: string) => {
+      const endIso =
+        pickedEndIso ?? new Date(Date.parse(startIso) + SLOT_MS).toISOString();
+      setSelection({ endsAt: endIso, startsAt: startIso });
       setPrefill((previous) => ({
         end: formatUtcTime(endIso),
         seq: (previous?.seq ?? 0) + 1,
@@ -156,8 +162,10 @@ function BookingsPage() {
   );
 
   const handleRoomChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) =>
-      navigate({ search: { day, roomId: event.target.value } }),
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      setSelection(null);
+      return navigate({ search: { day, roomId: event.target.value } });
+    },
     [day, navigate]
   );
 
@@ -182,6 +190,7 @@ function BookingsPage() {
         })
       );
       if (ok) {
+        setSelection(null);
         await loadUpcoming();
       }
       return ok;
@@ -258,7 +267,12 @@ function BookingsPage() {
             <h2 className="mb-2 font-heading text-2xl text-foreground">
               {room.name}: next 7 days
             </h2>
-            <AvailabilityGrid grid={grid} nowIso={nowIso} onPick={handlePick} />
+            <AvailabilityGrid
+              grid={grid}
+              nowIso={nowIso}
+              onPick={handlePick}
+              selection={selection}
+            />
           </section>
 
           <div className="mt-6">

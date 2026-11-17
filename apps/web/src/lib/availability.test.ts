@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildGrid,
+  dragRange,
   nextFreeSlot,
   nextFreeTime,
   overlapsBooked,
@@ -164,5 +165,37 @@ describe("overlapsBooked", () => {
     expect(overlapsBooked([nine], iso(DAY, "08:00"), iso(DAY, "11:00"))).toBe(
       true
     );
+  });
+});
+
+describe("dragRange", () => {
+  // 08:00 slot is index 0; a 09:00-09:30 booking covers indexes 4 and 5.
+  const booking = { endsAt: iso(DAY, "09:30"), startsAt: iso(DAY, "09:00") };
+  const { slots } = buildGrid([booking], DAY, early)[0] ?? { slots: [] };
+
+  test("a drag on one slot selects just that slot", () => {
+    expect(dragRange(slots, 2, 2)).toEqual({ from: 2, to: 2 });
+  });
+
+  test("dragging down selects every slot to the pointer", () => {
+    expect(dragRange(slots, 0, 3)).toEqual({ from: 0, to: 3 });
+  });
+
+  test("dragging up gives the same range as dragging down", () => {
+    expect(dragRange(slots, 3, 0)).toEqual({ from: 0, to: 3 });
+  });
+
+  test("stops before a booking instead of crossing it", () => {
+    expect(dragRange(slots, 1, 8)).toEqual({ from: 1, to: 3 });
+  });
+
+  test("stops after a booking when dragging up past it", () => {
+    expect(dragRange(slots, 8, 0)).toEqual({ from: 6, to: 8 });
+  });
+
+  test("a booked or past anchor gives no range", () => {
+    expect(dragRange(slots, 4, 8)).toBeNull();
+    const past = buildGrid([], DAY, new Date(iso(DAY, "09:00"))).at(0);
+    expect(dragRange(past?.slots ?? [], 0, 3)).toBeNull();
   });
 });

@@ -138,3 +138,25 @@ export function overlapsBooked(
     (b) => Date.parse(b.startsAt) < end && Date.parse(b.endsAt) > start
   );
 }
+
+/**
+ * Slots (inclusive indexes into one day's `slots`) covered by a drag that began
+ * on `anchor` and is now over `current`. The range grows from the anchor toward
+ * the pointer and stops before the first slot that is not free, so a drag can
+ * never cross a booking. Null when the anchor itself is not free.
+ */
+export function dragRange(
+  slots: GridSlot[],
+  anchor: number,
+  current: number
+): { from: number; to: number } | null {
+  if (slots[anchor]?.state !== "free") {
+    return null;
+  }
+  const step = current >= anchor ? 1 : -1;
+  let reach = anchor;
+  while (reach !== current && slots[reach + step]?.state === "free") {
+    reach += step;
+  }
+  return { from: Math.min(anchor, reach), to: Math.max(anchor, reach) };
+}
