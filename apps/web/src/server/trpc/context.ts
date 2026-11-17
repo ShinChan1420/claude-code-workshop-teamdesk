@@ -29,12 +29,34 @@ const createServices = (db: Database) => ({
 // procedures use `ctx.services` and never `ctx.env`.
 // biome-ignore lint/style/useConsistentTypeDefinitions: @hono/trpc-server needs a Record<string, unknown>, which an interface is not
 export type Context = {
+  /**
+   * Tells every open browser that a room's bookings changed. Never rejects:
+   * the booking has already succeeded, so a failed ping is only logged.
+   */
+  notifyBookingsChanged: (roomId: string) => Promise<void>;
   services: ReturnType<typeof createServices>;
   /** Signed-in user, or null for anonymous callers. */
   userId: string | null;
 };
 
+const createNotifier =
+  (bindings: Env) =>
+  async (roomId: string): Promise<void> => {
+    try {
+      const hub = bindings.BOOKINGS_HUB.get(
+        bindings.BOOKINGS_HUB.idFromName("main")
+      );
+      await hub.fetch("https://hub/notify", {
+        body: JSON.stringify({ roomId }),
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Could not notify BookingsHub:", error);
+    }
+  };
+
 const createContext = (bindings: Env, userId: string | null): Context => ({
+  notifyBookingsChanged: createNotifier(bindings),
   services: createServices(drizzle(bindings.DB)),
   userId,
 });

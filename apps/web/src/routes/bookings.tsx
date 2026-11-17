@@ -1,5 +1,5 @@
-import type { Booking } from "@repo/db/shared";
-import { createFileRoute } from "@tanstack/react-router";
+import { BOOKING_MIN_MINUTES, type Booking } from "@repo/db/shared";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import {
   type ChangeEvent,
   useCallback,
@@ -7,8 +7,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import AvailabilityGrid from "#/components/bookings/AvailabilityGrid";
 import BookingForm, {
   type BookingDraft,
+  type BookingPrefill,
 } from "#/components/bookings/BookingForm";
 import BookingList from "#/components/bookings/BookingList";
 import FormError from "#/components/form-error";
@@ -21,8 +23,12 @@ import {
 } from "#/components/ui/native-select";
 import { useActingMember } from "#/hooks/use-acting-member";
 import { useAction } from "#/hooks/use-action";
+import { useBookingsSocket } from "#/hooks/use-bookings-socket";
 import { getTrpc } from "#/integrations/trpc/client";
-import { todayUtc } from "#/lib/datetime";
+import { buildGrid } from "#/lib/availability";
+import { formatUtcTime, todayUtc } from "#/lib/datetime";
+
+const SLOT_MS = BOOKING_MIN_MINUTES * 60_000;
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,21 +58,43 @@ export const Route = createFileRoute("/bookings")({
     ]);
     const day = deps.day ?? todayUtc();
     const room = rooms.find((r) => r.id === deps.roomId) ?? rooms[0] ?? null;
-    const bookings = room
-      ? await trpc.bookings.forRoom.query({
-          day: `${day}T00:00:00.000Z`,
-          roomId: room.id,
-        })
-      : [];
-    return { bookings, day, members, room, rooms };
+    const now = new Date();
+    const today = todayUtc(now);
+    const [bookings, booked] = room
+      ? await Promise.all([
+          trpc.bookings.forRoom.query({
+            day: `${day}T00:00:00.000Z`,
+            roomId: room.id,
+          }),
+          trpc.bookings.availability.query({
+            from: `${today}T00:00:00.000Z`,
+            roomId: room.id,
+          }),
+        ])
+      : [[], []];
+    // Built here, not in the component, so SSR and hydration share one "now".
+    const grid = buildGrid(booked, today, now);
+    return {
+      booked,
+      bookings,
+      day,
+      grid,
+      members,
+      nowIso: now.toISOString(),
+      room,
+      rooms,
+    };
   },
   component: BookingsPage,
   errorComponent: PageError,
 });
 
 function BookingsPage() {
-  const { bookings, day, members, room, rooms } = Route.useLoaderData();
+  const { booked, bookings, day, grid, members, nowIso, room, rooms } =
+    Route.useLoaderData();
   const navigate = Route.useNavigate();
+  const router = useRouter();
+  const [prefill, setPrefill] = useState<BookingPrefill | null>(null);
   const { actingMember, setActingMemberId } = useActingMember(members);
   const createBooking = useAction();
   const cancelBooking = useAction();
@@ -94,6 +122,38 @@ function BookingsPage() {
   useEffect(() => {
     loadUpcoming().catch(() => setUpcoming([]));
   }, [loadUpcoming]);
+
+  // Another browser changed a room's bookings. Reloading the route refetches
+  // the day list and the grid; the member's own list reloads alongside.
+  const handleBookingsChanged = useCallback(
+    (changedRoomId: string) => {
+      if (changedRoomId !== room?.id) {
+        return;
+      }
+      router.invalidate().catch(() => undefined);
+      loadUpcoming().catch(() => undefined);
+    },
+    [loadUpcoming, room?.id, router]
+  );
+  useBookingsSocket(handleBookingsChanged);
+
+  // A grid pick prefills the form (15 minutes, the user can extend it) and
+  // moves the form to the picked day.
+  const handlePick = useCallback(
+    (startIso: string) => {
+      const endIso = new Date(Date.parse(startIso) + SLOT_MS).toISOString();
+      setPrefill((previous) => ({
+        end: formatUtcTime(endIso),
+        seq: (previous?.seq ?? 0) + 1,
+        start: formatUtcTime(startIso),
+      }));
+      const pickedDay = startIso.slice(0, 10);
+      if (pickedDay !== day) {
+        navigate({ search: { day: pickedDay, roomId: room?.id } });
+      }
+    },
+    [day, navigate, room?.id]
+  );
 
   const handleRoomChange = useCallback(
     (event: ChangeEvent<HTMLSelectElement>) =>
@@ -194,13 +254,22 @@ function BookingsPage() {
             />
           </section>
 
+          <section className="mt-6">
+            <h2 className="mb-2 font-heading text-2xl text-foreground">
+              {room.name}: next 7 days
+            </h2>
+            <AvailabilityGrid grid={grid} nowIso={nowIso} onPick={handlePick} />
+          </section>
+
           <div className="mt-6">
             <BookingForm
+              booked={booked}
               capacity={room.capacity}
               day={day}
               error={createBooking.error}
               onSubmit={handleCreate}
               pending={createBooking.pending}
+              prefill={prefill}
             />
           </div>
 

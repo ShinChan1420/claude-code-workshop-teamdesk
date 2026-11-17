@@ -23,6 +23,61 @@ const standUp = (
   title: "Stand-up",
 });
 
+describe("bookings availability", () => {
+  const from = at("00:00");
+  const iso = (day: string, time: string) => `2026-10-${day}T${time}:00.000Z`;
+
+  test("returns nothing for an empty room", async () => {
+    expect(await bookings.availability(team.bigRoom.id, from)).toEqual([]);
+  });
+
+  test("returns a booking inside the window as a bare interval", async () => {
+    await bookings.create(team.ana.id, standUp(team.bigRoom.id));
+
+    expect(await bookings.availability(team.bigRoom.id, from)).toEqual([
+      { endsAt: at("09:30"), startsAt: at("09:00") },
+    ]);
+  });
+
+  test("includes a booking that spans midnight", async () => {
+    await bookings.create(
+      team.ana.id,
+      standUp(team.bigRoom.id, iso("23", "23:30"), iso("24", "00:30"))
+    );
+
+    // Window starting on the 24th still sees the tail of the late booking.
+    expect(
+      await bookings.availability(team.bigRoom.id, iso("24", "00:00"))
+    ).toEqual([{ endsAt: iso("24", "00:30"), startsAt: iso("23", "23:30") }]);
+  });
+
+  test("excludes cancelled bookings", async () => {
+    const booking = await bookings.create(
+      team.ana.id,
+      standUp(team.bigRoom.id)
+    );
+    await bookings.cancel(team.ana.id, booking.id);
+
+    expect(await bookings.availability(team.bigRoom.id, from)).toEqual([]);
+  });
+
+  test("excludes other rooms and bookings past the window", async () => {
+    await bookings.create(team.ana.id, standUp(team.smallRoom.id));
+    await bookings.create(
+      team.ana.id,
+      standUp(team.bigRoom.id, iso("30", "09:00"), iso("30", "09:30"))
+    );
+
+    expect(await bookings.availability(team.bigRoom.id, from)).toEqual([]);
+  });
+
+  test("rejects malformed input", async () => {
+    await expect(
+      bookings.availability(team.bigRoom.id, "not-a-date")
+    ).rejects.toBeDefined();
+  });
+});
+
 describe("bookings service", () => {
   test("create stores the booking for the acting member", async () => {
     const booking = await bookings.create(

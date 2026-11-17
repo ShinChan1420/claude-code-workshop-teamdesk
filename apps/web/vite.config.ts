@@ -8,7 +8,11 @@ import { defineConfig } from "vite";
 const config = defineConfig({
   plugins: [
     devtools(),
-    cloudflare({ viteEnvironment: { name: "ssr" } }),
+    cloudflare({
+      // `bun run dev:remote` sets REMOTE_DB=1 to talk to the real D1 database.
+      remoteBindings: process.env.REMOTE_DB === "1",
+      viteEnvironment: { name: "ssr" },
+    }),
     tailwindcss(),
     tanstackStart(),
     viteReact(),

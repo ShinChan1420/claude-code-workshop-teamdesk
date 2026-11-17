@@ -16,6 +16,7 @@
     "db:seed:remote": "bun run --filter web db:seed:remote",
     "deploy": "turbo run deploy",
     "dev": "turbo run dev",
+    "dev:remote": "bun run --filter web dev:remote",
     "fix": "ultracite fix",
     "lint": "ultracite check",
     "prepare": "husky && turbo run cf-typegen",

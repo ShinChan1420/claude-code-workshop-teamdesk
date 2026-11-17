@@ -32,7 +32,19 @@ app.use(
   })
 );
 
+// Live sync: every browser's WebSocket lands on the one BookingsHub, which
+// pings them when a booking changes (see trpc/context.ts).
+app.get("/api/ws", (c) => {
+  if (c.req.header("Upgrade") !== "websocket") {
+    return c.text("Expected a WebSocket upgrade", 426);
+  }
+  const hub = c.env.BOOKINGS_HUB.get(c.env.BOOKINGS_HUB.idFromName("main"));
+  return hub.fetch(c.req.raw);
+});
+
 // Everything else is handled by TanStack Start (SSR pages and assets).
 app.all("*", (c) => handler.fetch(c.req.raw));
 
+// biome-ignore lint/performance/noBarrelFile: Cloudflare finds a Durable Object class only as a named export of the Worker entry
+export { BookingsHub } from "./server/bookings-hub.ts";
 export default app;

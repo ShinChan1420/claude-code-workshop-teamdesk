@@ -12,6 +12,7 @@ import {
 } from "@repo/db/bookings";
 import { getRoom } from "@repo/db/rooms";
 import {
+  AVAILABILITY_DAYS,
   BOOKING_MAX_MINUTES,
   BOOKING_MIN_MINUTES,
   BOOKING_TITLE_MAX_LENGTH,
@@ -54,7 +55,30 @@ export const rescheduleBookingInput = z.object({
 
 export type RescheduleBookingInput = z.input<typeof rescheduleBookingInput>;
 
+export const availabilityInput = z.object({
+  from: z.iso.datetime(),
+  roomId: z.string().min(1),
+});
+
+export type AvailabilityInput = z.input<typeof availabilityInput>;
+
+/** A booked stretch of a room, without who booked it or why. */
+export interface BookedInterval {
+  endsAt: string;
+  startsAt: string;
+}
+
+const MS_PER_DAY = 86_400_000;
+
 export interface BookingsService {
+  /**
+   * The room's active bookings overlapping the AVAILABILITY_DAYS UTC days that
+   * start at the day `from` falls on, as bare intervals.
+   */
+  availability: (
+    roomId: string,
+    from: AvailabilityInput["from"]
+  ) => Promise<BookedInterval[]>;
   /** Throws ForbiddenError unless the actor owns the booking or is an admin. */
   cancel: (actorId: string, bookingId: string) => Promise<Booking>;
   create: (actorId: string, input: CreateBookingInput) => Promise<Booking>;
@@ -110,6 +134,15 @@ async function countBookingsOnDay(
 }
 
 export const createBookingsService = (db: Database): BookingsService => ({
+  availability: async (roomId, from) => {
+    const data = availabilityInput.parse({ from, roomId });
+    const { start } = utcDayBounds(data.from);
+    const to = new Date(
+      Date.parse(start) + AVAILABILITY_DAYS * MS_PER_DAY
+    ).toISOString();
+    const rows = await listRoomBookings(db, data.roomId, { from: start, to });
+    return rows.map(({ endsAt, startsAt }) => ({ endsAt, startsAt }));
+  },
   cancel: async (actorId, bookingId) => {
     const actor = await requireMember(db, actorId);
     const booking = await getBooking(db, bookingId);

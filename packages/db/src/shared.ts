@@ -69,5 +69,10 @@ export const BOOKING_MIN_MINUTES = 15;
 export const BOOKING_MAX_MINUTES = 240;
 /** Active bookings one member may start on a single UTC day. */
 export const MAX_BOOKINGS_PER_MEMBER_PER_DAY = 3;
+/** The availability grid covers this many UTC days, starting today. */
+export const AVAILABILITY_DAYS = 7;
+/** Grid rows run from this UTC hour (inclusive) to the end hour (exclusive). */
+export const AVAILABILITY_START_HOUR = 8;
+export const AVAILABILITY_END_HOUR = 18;
 export const TASK_TITLE_MAX_LENGTH = 160;
 export const ANNOUNCEMENT_BODY_MAX_LENGTH = 1000;

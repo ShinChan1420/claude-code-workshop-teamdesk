@@ -5,12 +5,19 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server.ts",
   "observability": { "enabled": true },
+  "durable_objects": {
+    "bindings": [{ "name": "BOOKINGS_HUB", "class_name": "BookingsHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BookingsHub"] }],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "teamdesk",
       // Filled in by `wrangler d1 create`. Local development ignores the value.
       "database_id": "b1eb0bb6-d591-490e-8e8e-915f4f446c21",
+      // Only used by `bun run dev:remote` (see vite.config.ts). Plain
+      // `bun run dev` leaves the plugin's remoteBindings off and stays local.
+      "remote": true,
       "migrations_dir": "../../packages/db/migrations"
     }
   ]

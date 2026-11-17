@@ -14,6 +14,7 @@
     "db:seed:remote": "wrangler d1 execute DB --remote --file ../../packages/db/seed.sql",
     "deploy": "bun run build && wrangler deploy",
     "dev": "bun run db:apply && bun run db:seed && vite dev --port 3000",
+    "dev:remote": "REMOTE_DB=1 vite dev --port 3000",
     "generate-routes": "tsr generate",
     "preview": "vite preview",
     "test": "bun test src",
